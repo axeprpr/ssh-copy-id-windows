@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 type Config struct {
 	Host       string
@@ -30,39 +30,36 @@ func main() {
 	}
 
 	config := parseArgs()
-	
-	// 读取公钥
+
 	publicKey, err := readPublicKey(config.KeyPath)
 	if err != nil {
-		log.Fatalf("读取公钥失败: %v", err)
+		log.Fatalf("Failed to read public key: %v", err)
 	}
 
-	// 连接到远程服务器并添加公钥
-	err = copySSHKey(config, publicKey)
-	if err != nil {
-		log.Fatalf("复制SSH密钥失败: %v", err)
+	if err = copySSHKey(config, publicKey); err != nil {
+		log.Fatalf("Failed to copy SSH key: %v", err)
 	}
 
-	fmt.Printf("SSH密钥已成功复制到 %s@%s\n", config.User, config.Host)
+	fmt.Printf("SSH key successfully copied to %s@%s\n", config.User, config.Host)
 }
 
 func printUsage() {
-	fmt.Printf("ssh-copy-id v%s - Windows实现\n", version)
-	fmt.Println("用法:")
-	fmt.Println("  ssh-copy-id [选项] [用户@]主机")
+	fmt.Printf("ssh-copy-id v%s - Windows implementation\n", version)
+	fmt.Println("Usage:")
+	fmt.Println("  ssh-copy-id [options] [user@]host")
 	fmt.Println("")
-	fmt.Println("选项:")
-	fmt.Println("  -i <密钥文件>    指定要复制的公钥文件路径 (自动检测可用密钥)")
-	fmt.Println("  -p <端口>        指定SSH端口 (默认: 22)")
-	fmt.Println("  -h              显示此帮助信息")
+	fmt.Println("Options:")
+	fmt.Println("  -i <keyfile>    Specify the public key file to copy (auto-detect if possible)")
+	fmt.Println("  -p <port>       SSH port (default: 22)")
+	fmt.Println("  -h              Show this help message")
 	fmt.Println("")
-	fmt.Println("示例:")
+	fmt.Println("Examples:")
 	fmt.Println("  ssh-copy-id user@example.com")
-	fmt.Println("  ssh-copy-id -i C:\\Users\\username\\.ssh\\mykey.pub -p 2222 user@192.168.1.100")
+	fmt.Println("  ssh-copy-id -i C:\\Users\\username\\.ssh\\id_ed25519.pub -p 2222 user@192.168.1.100")
 	fmt.Println("")
-	fmt.Println("如果没有SSH密钥，请先生成:")
+	fmt.Println("If you do not have an SSH key yet, generate one:")
 	fmt.Println("  ssh-keygen -t rsa -b 4096 -C \"your_email@example.com\"")
-	fmt.Println("  或")
+	fmt.Println("  or")
 	fmt.Println("  ssh-keygen -t ed25519 -C \"your_email@example.com\"")
 }
 
@@ -82,37 +79,35 @@ func parseArgs() *Config {
 			os.Exit(0)
 		case "-i":
 			if i+1 >= len(args) {
-				log.Fatal("选项 -i 需要指定密钥文件路径")
+				log.Fatal("Option -i requires a key file path")
 			}
 			config.KeyPath = args[i+1]
 			i += 2
 		case "-p":
 			if i+1 >= len(args) {
-				log.Fatal("选项 -p 需要指定端口号")
+				log.Fatal("Option -p requires a port number")
 			}
 			config.Port = args[i+1]
 			i += 2
 		default:
-			if !strings.Contains(args[i], "-") {
-				// 解析 [用户@]主机
+			if !strings.HasPrefix(args[i], "-") {
 				parts := strings.Split(args[i], "@")
 				if len(parts) == 2 {
 					config.User = parts[0]
 					config.Host = parts[1]
 				} else {
 					config.Host = parts[0]
-					// 如果没有指定用户，使用当前用户
 					config.User = os.Getenv("USERNAME")
 				}
 				i++
 			} else {
-				log.Fatalf("未知选项: %s", args[i])
+				log.Fatalf("Unknown option: %s", args[i])
 			}
 		}
 	}
 
 	if config.Host == "" {
-		log.Fatal("必须指定主机地址")
+		log.Fatal("Host is required")
 	}
 
 	return config
@@ -121,97 +116,86 @@ func parseArgs() *Config {
 func getDefaultKeyPath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal("无法获取用户主目录")
+		log.Fatal("Failed to determine user home directory")
 	}
-	
-	// Windows下可能的SSH密钥路径
+
 	possiblePaths := []string{
 		filepath.Join(homeDir, ".ssh", "id_rsa.pub"),
 		filepath.Join(homeDir, ".ssh", "id_ed25519.pub"),
 		filepath.Join(homeDir, ".ssh", "id_ecdsa.pub"),
-		// Windows OpenSSH 可能的路径
 		filepath.Join("C:", "ProgramData", "ssh", "ssh_host_rsa_key.pub"),
 	}
-	
-	// 检查哪个文件存在
+
 	for _, path := range possiblePaths {
 		if _, err := os.Stat(path); err == nil {
-			fmt.Printf("找到SSH公钥: %s\n", path)
+			fmt.Printf("Found SSH public key: %s\n", path)
 			return path
 		}
 	}
-	
-	// 如果都不存在，返回默认路径并给出提示
+
 	defaultPath := filepath.Join(homeDir, ".ssh", "id_rsa.pub")
-	fmt.Printf("警告: 未找到SSH公钥文件。请确保以下路径之一存在:\n")
+	fmt.Printf("Warning: No SSH public key file found. Please ensure one of these paths exists:\n")
 	for _, path := range possiblePaths {
 		fmt.Printf("  - %s\n", path)
 	}
-	fmt.Printf("或使用 -i 选项指定自定义路径\n")
-	fmt.Printf("如果没有SSH密钥，可以使用以下命令生成:\n")
-	fmt.Printf("  ssh-keygen -t rsa -b 4096 -C \"your_email@example.com\"\n")
-	fmt.Printf("\n")
-	
+	fmt.Printf("Or specify a custom path with -i\n")
+	fmt.Printf("If you do not have an SSH key, generate one with:\n")
+	fmt.Printf("  ssh-keygen -t rsa -b 4096 -C \"your_email@example.com\"\n\n")
+
 	return defaultPath
 }
 
 func readPublicKey(keyPath string) (string, error) {
-	// 展开路径中的 ~ 符号
 	if strings.HasPrefix(keyPath, "~/") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("无法获取用户主目录: %v", err)
+			return "", fmt.Errorf("failed to get user home directory: %v", err)
 		}
 		keyPath = filepath.Join(homeDir, keyPath[2:])
 	}
 
 	content, err := ioutil.ReadFile(keyPath)
 	if err != nil {
-		return "", fmt.Errorf("无法读取密钥文件 %s: %v", keyPath, err)
+		return "", fmt.Errorf("failed to read key file %s: %v", keyPath, err)
 	}
 
 	publicKey := strings.TrimSpace(string(content))
 	if publicKey == "" {
-		return "", fmt.Errorf("密钥文件为空")
+		return "", fmt.Errorf("key file is empty")
 	}
 
 	return publicKey, nil
 }
 
 func copySSHKey(config *Config, publicKey string) error {
-	fmt.Printf("正在连接到 %s@%s:%s ...\n", config.User, config.Host, config.Port)
+	fmt.Printf("Connecting to %s@%s:%s ...\n", config.User, config.Host, config.Port)
 
-	// 获取密码
-	fmt.Printf("输入 %s@%s 的密码: ", config.User, config.Host)
+	fmt.Printf("Enter password for %s@%s: ", config.User, config.Host)
 	password, err := readPassword()
 	if err != nil {
-		return fmt.Errorf("读取密码失败: %v", err)
+		return fmt.Errorf("failed to read password: %v", err)
 	}
 
-	// 创建SSH客户端配置
 	sshConfig := &ssh.ClientConfig{
 		User: config.User,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 注意：生产环境中应该验证主机密钥
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // NOTE: In production, verify host key
 	}
 
-	// 连接到SSH服务器
 	client, err := ssh.Dial("tcp", config.Host+":"+config.Port, sshConfig)
 	if err != nil {
-		return fmt.Errorf("SSH连接失败: %v", err)
+		return fmt.Errorf("SSH connection failed: %v", err)
 	}
 	defer client.Close()
 
-	// 创建会话
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("创建SSH会话失败: %v", err)
+		return fmt.Errorf("failed to create SSH session: %v", err)
 	}
 	defer session.Close()
 
-	// 准备要执行的命令
 	commands := []string{
 		"mkdir -p ~/.ssh",
 		"chmod 700 ~/.ssh",
@@ -222,19 +206,15 @@ func copySSHKey(config *Config, publicKey string) error {
 
 	command := strings.Join(commands, " && ")
 
-	// 执行命令
 	output, err := session.CombinedOutput(command)
 	if err != nil {
-		return fmt.Errorf("执行远程命令失败: %v, 输出: %s", err, string(output))
+		return fmt.Errorf("failed to execute remote commands: %v, output: %s", err, string(output))
 	}
 
 	return nil
 }
 
 func readPassword() (string, error) {
-	// 在Windows上，我们使用bufio来读取密码
-	// 注意：这不会隐藏输入的字符，如果需要隐藏密码输入，
-	// 可以使用第三方库如 golang.org/x/term
 	reader := bufio.NewReader(os.Stdin)
 	password, err := reader.ReadString('\n')
 	if err != nil {
