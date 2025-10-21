@@ -23,4 +23,3 @@ Installers:
   - ssh-copy-id
 ManifestType: installer
 ManifestVersion: 1.2.0
-
