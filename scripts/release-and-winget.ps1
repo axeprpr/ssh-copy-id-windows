@@ -28,8 +28,13 @@ if($updatedMainGoContent -ne $mainGoContent){
 
 # 2. Build
 if(-not $SkipBuild){
+  Write-Step "Windows resource"
+  .\scripts\generate-windows-resource.ps1 -Version $Version
+  if(-not (Test-Path rsrc_windows_amd64.syso)){ throw 'Windows resource generation failed' }
+  Write-Ok "Windows resource generated"
+
   Write-Step "Build"
-  go build -trimpath -ldflags "-s -w" -o ssh-copy-id.exe main.go
+  go build -trimpath -ldflags "-s -w" -o ssh-copy-id.exe .
   if(-not (Test-Path ssh-copy-id.exe)){ throw 'Build failed' }
   Write-Ok "Binary built"
 }else{ Write-Warn "Skip build" }
@@ -146,7 +151,7 @@ Write-Ok "Staged manifests at $submissionDir"
 # 6. Git commit/tag/push
 Write-Step "Git operations"
 if($DryRun){ Write-Warn "DryRun: skip git" } else {
-  git add ssh-copy-id.exe winget-manifests/*.yaml main.go .gitignore README.md WINGET_PUBLISH.md scripts\release-and-winget.ps1 2>$null
+  git add ssh-copy-id.exe winget-manifests/*.yaml main.go .gitignore README.md WINGET_PUBLISH.md scripts\release-and-winget.ps1 scripts\generate-windows-resource.ps1 assets\icon.ico 2>$null
   git commit -m "release: $Version" | Out-Null
   git tag "v$Version"
   git push origin main
