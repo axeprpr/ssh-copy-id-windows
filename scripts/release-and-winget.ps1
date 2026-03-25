@@ -3,7 +3,8 @@ param(
   [string]$GitHubRepo = "axeprpr/ssh-copy-id-windows",
   [switch]$SkipBuild,
   [switch]$DryRun,
-  [string]$OutputRoot = "out"
+  [string]$OutputRoot = "out",
+  [string]$ReleaseDate = (Get-Date).ToString('yyyy-MM-dd')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,16 +42,94 @@ Write-Info "SHA256=$hash"
 # 4. Update manifests
 Write-Step "Update winget manifests"
 $installer = Join-Path winget-manifests 'axeprpr.SSHCopyID.installer.yaml'
-(Get-Content $installer) -replace 'PackageVersion: .*', "PackageVersion: $Version" `
-  -replace 'InstallerUrl: https://github.com/.*/download/v.*?/ssh-copy-id.exe', "InstallerUrl: https://github.com/$GitHubRepo/releases/download/v$Version/ssh-copy-id.exe" `
-  -replace 'InstallerSha256: .*', "InstallerSha256: $hash" | Set-Content $installer
+$installerContent = @"
+# Created with komac v2.14.0
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+PackageIdentifier: axeprpr.SSHCopyID
+PackageVersion: $Version
+InstallerType: portable
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- ssh-copy-id
+Protocols:
+- ssh
+FileExtensions:
+- pub
+ReleaseDate: $ReleaseDate
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/$GitHubRepo/releases/download/v$Version/ssh-copy-id.exe
+  InstallerSha256: $hash
+ManifestType: installer
+ManifestVersion: 1.10.0
+"@
+$installerContent | Set-Content $installer
 
 $versionFile = Join-Path winget-manifests 'axeprpr.SSHCopyID.yaml'
-(Get-Content $versionFile) -replace 'PackageVersion: .*', "PackageVersion: $Version" | Set-Content $versionFile
+$versionContent = @"
+# Created with komac v2.14.0
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+
+PackageIdentifier: axeprpr.SSHCopyID
+PackageVersion: $Version
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.10.0
+"@
+$versionContent | Set-Content $versionFile
 
 $localeFile = Join-Path winget-manifests 'axeprpr.SSHCopyID.locale.en-US.yaml'
-(Get-Content $localeFile) -replace 'PackageVersion: .*', "PackageVersion: $Version" `
-  -replace 'Version bump to .*', "Version bump to $Version" | Set-Content $localeFile
+$localeContent = @"
+# Created with komac v2.14.0
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: axeprpr.SSHCopyID
+PackageVersion: $Version
+PackageLocale: en-US
+Publisher: axeprpr
+PublisherUrl: https://github.com/axeprpr
+PublisherSupportUrl: https://github.com/$GitHubRepo/issues
+Author: axeprpr
+PackageName: SSH Copy ID
+PackageUrl: https://github.com/$GitHubRepo
+License: MIT
+LicenseUrl: https://github.com/$GitHubRepo/blob/HEAD/LICENSE
+Copyright: Copyright (c) axeprpr
+ShortDescription: SSH-Copy-ID for Windows - Copy SSH public keys to remote servers
+Description: |-
+  SSH-Copy-ID for Windows is a command-line tool that copies SSH public keys to remote servers' authorized_keys files.
+  It provides the same functionality as the Linux ssh-copy-id command but is specifically designed for Windows systems.
+
+  Features:
+  - Copy SSH public keys to remote servers
+  - Support for custom SSH key files and ports
+  - Automatic creation of remote .ssh directory and authorized_keys file
+  - Duplicate key detection and prevention
+  - Cross-platform compatibility
+ReleaseNotes: |-
+  - Hardened the key copy flow by streaming the public key over stdin
+  - Added public key validation before connecting
+  - Added tests for argument parsing and command generation
+ReleaseNotesUrl: https://github.com/$GitHubRepo/releases/tag/v$Version
+Moniker: ssh-copy-id
+Tags:
+- authentication
+- command-line
+- remote
+- ssh
+- ssh-keys
+- terminal
+- windows
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
+"@
+$localeContent | Set-Content $localeFile
 
 Write-Ok "Manifests updated"
 
