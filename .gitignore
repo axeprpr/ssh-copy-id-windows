@@ -2,3 +2,6 @@
 .gomodcache/
 out/
 ssh-copy-id.exe
+rsrc_windows_amd64.syso
+rsrc_windows_386.syso
+resource_windows_amd64.syso
