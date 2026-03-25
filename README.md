@@ -18,6 +18,7 @@
 
 ```bash
 go mod tidy
+go test ./...
 go build -o ssh-copy-id.exe main.go
 ```
 
@@ -88,6 +89,8 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 3. **密钥格式**: 确保你的公钥文件格式正确（通常以ssh-rsa、ssh-ed25519等开头）。
 
 4. **权限**: 程序会自动设置远程服务器上.ssh目录和authorized_keys文件的正确权限。
+
+5. **输入校验**: 程序会在复制前校验公钥格式，尽早暴露错误输入。
 
 ## 依赖
 

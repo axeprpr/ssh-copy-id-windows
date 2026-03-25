@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,12 +14,10 @@ import (
 const version = "1.1.0"
 
 type Config struct {
-	Host       string
-	Port       string
-	User       string
-	KeyPath    string
-	Password   string
-	PrivateKey string
+	Host    string
+	Port    string
+	User    string
+	KeyPath string
 }
 
 func main() {
@@ -64,12 +61,15 @@ func printUsage() {
 }
 
 func parseArgs() *Config {
+	return parseArgsFrom(os.Args[1:], os.Getenv, getDefaultKeyPath)
+}
+
+func parseArgsFrom(args []string, lookupEnv func(string) string, defaultKeyPath func() string) *Config {
 	config := &Config{
 		Port:    "22",
-		KeyPath: getDefaultKeyPath(),
+		KeyPath: defaultKeyPath(),
 	}
 
-	args := os.Args[1:]
 	i := 0
 
 	for i < len(args) {
@@ -97,7 +97,7 @@ func parseArgs() *Config {
 					config.Host = parts[1]
 				} else {
 					config.Host = parts[0]
-					config.User = os.Getenv("USERNAME")
+					config.User = lookupEnv("USERNAME")
 				}
 				i++
 			} else {
@@ -154,7 +154,7 @@ func readPublicKey(keyPath string) (string, error) {
 		keyPath = filepath.Join(homeDir, keyPath[2:])
 	}
 
-	content, err := ioutil.ReadFile(keyPath)
+	content, err := os.ReadFile(keyPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read key file %s: %v", keyPath, err)
 	}
@@ -162,6 +162,10 @@ func readPublicKey(keyPath string) (string, error) {
 	publicKey := strings.TrimSpace(string(content))
 	if publicKey == "" {
 		return "", fmt.Errorf("key file is empty")
+	}
+
+	if _, _, _, _, err := ssh.ParseAuthorizedKey(content); err != nil {
+		return "", fmt.Errorf("invalid public key format: %v", err)
 	}
 
 	return publicKey, nil
@@ -196,15 +200,8 @@ func copySSHKey(config *Config, publicKey string) error {
 	}
 	defer session.Close()
 
-	commands := []string{
-		"mkdir -p ~/.ssh",
-		"chmod 700 ~/.ssh",
-		fmt.Sprintf("echo '%s' >> ~/.ssh/authorized_keys", publicKey),
-		"chmod 600 ~/.ssh/authorized_keys",
-		"sort ~/.ssh/authorized_keys | uniq > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys",
-	}
-
-	command := strings.Join(commands, " && ")
+	command := buildAuthorizedKeysCommand()
+	session.Stdin = strings.NewReader(publicKey + "\n")
 
 	output, err := session.CombinedOutput(command)
 	if err != nil {
@@ -221,4 +218,18 @@ func readPassword() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(password), nil
+}
+
+func buildAuthorizedKeysCommand() string {
+	commands := []string{
+		"umask 077",
+		"mkdir -p ~/.ssh",
+		"touch ~/.ssh/authorized_keys",
+		"cat >> ~/.ssh/authorized_keys",
+		"sort -u ~/.ssh/authorized_keys -o ~/.ssh/authorized_keys",
+		"chmod 700 ~/.ssh",
+		"chmod 600 ~/.ssh/authorized_keys",
+	}
+
+	return strings.Join(commands, " && ")
 }
