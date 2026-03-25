@@ -1,3 +1,4 @@
 .gocache/
 .gomodcache/
 out/
+ssh-copy-id.exe
