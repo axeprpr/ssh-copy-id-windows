@@ -22,6 +22,17 @@ go test ./...
 go build -o ssh-copy-id.exe main.go
 ```
 
+## 发布到 winget
+
+这个仓库里的 `winget-manifests/` 只是当前版本的源清单。
+真正提交时，目标仓库是 `microsoft/winget-pkgs`，目录应为：
+
+```text
+manifests/a/axeprpr/SSHCopyID/<Version>/
+```
+
+发布说明见 [WINGET_PUBLISH.md](WINGET_PUBLISH.md)。
+
 ## 使用方法
 
 ### 基本用法

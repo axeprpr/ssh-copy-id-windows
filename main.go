@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const version = "1.1.0"
+const version = "1.1.1"
 
 type Config struct {
 	Host    string

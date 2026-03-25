@@ -1,60 +1,49 @@
-# 发布到 Windows Package Manager (winget) 指南
+# Winget Publish Workflow
 
-## 前提条件
+This repository keeps one canonical set of manifests in `winget-manifests/`.
 
-1. **GitHub账户** - winget使用GitHub作为包清单的存储库
-2. **已发布的Release** - 需要在GitHub上有可下载的二进制文件
-3. **清单文件** - 符合winget规范的YAML配置文件
+Those files are not submitted to winget directly from this repository. The actual submission target is the `microsoft/winget-pkgs` repository, under:
 
-## 步骤1: 准备GitHub仓库
-
-### 1.1 创建GitHub仓库
-```bash
-# 在GitHub上创建新仓库，例如: yourusername/ssh-copy-id-windows
+```text
+manifests/a/axeprpr/SSHCopyID/<Version>/
 ```
 
-### 1.2 上传代码并创建Release
-```bash
-git init
-git add .
-git commit -m "Initial commit: SSH-Copy-ID for Windows"
-git remote add origin https://github.com/yourusername/ssh-copy-id-windows.git
-git push -u origin main
+## Release Order
 
-# 创建标签和Release
-git tag v1.0.0
-git push origin v1.0.0
+1. Update the app version in `main.go`.
+2. Build `ssh-copy-id.exe`.
+3. Publish a GitHub Release in `axeprpr/ssh-copy-id-windows`.
+4. Update `winget-manifests/` so the version, release URL, and SHA256 match that GitHub Release.
+5. Copy the manifest files into a fork of `microsoft/winget-pkgs`.
+6. Open a Pull Request to `microsoft/winget-pkgs`.
+
+## Local Helper Script
+
+Use:
+
+```powershell
+.\scripts\release-and-winget.ps1 -Version 1.1.1
 ```
 
-### 1.3 在GitHub Release中上传二进制文件
-- 进入GitHub仓库的Releases页面
-- 点击"Create a new release"
-- 选择标签v1.0.0
-- 上传编译好的`ssh-copy-id.exe`文件
-- 添加Release说明
+The script will:
 
-## 步骤2: 创建winget清单文件
+- align the version in `main.go`
+- build `ssh-copy-id.exe`
+- compute the SHA256
+- update the manifests in `winget-manifests/`
+- stage a ready-to-submit folder under `out/winget-pkgs/manifests/a/axeprpr/SSHCopyID/<Version>/`
 
-winget需要三个YAML文件：
-1. `version.yaml` - 版本信息
-2. `installer.yaml` - 安装程序信息  
-3. `locale.yaml` - 本地化信息
+If `gh` is installed and authenticated, the script can also create the Git tag and GitHub Release.
 
-## 步骤3: 提交到winget-pkgs仓库
+## Notes
 
-1. Fork `microsoft/winget-pkgs` 仓库
-2. 在`manifests/y/YourName/SSHCopyID/1.0.0/`目录下添加清单文件
-3. 创建Pull Request
+- Do not keep versioned winget submission folders like `1.1.0/` in the root of this repository.
+- Treat `winget-manifests/` as the source of truth for the next submission only.
+- `InstallerSha256` must match the exact binary attached to the GitHub Release.
 
-## 自动化发布
+## References
 
-可以使用GitHub Actions自动化这个过程。
-
-## 注意事项
-
-- 包名必须是唯一的
-- 二进制文件必须是可公开下载的
-- 需要通过winget的验证流程
-- 首次提交可能需要几天时间审核
-
-详细步骤请参考后续文件。
+- Microsoft Learn: Windows Package Manager manifest repository
+  https://learn.microsoft.com/en-us/windows/package-manager/package/repository
+- Microsoft Learn: Package manifest authoring
+  https://learn.microsoft.com/en-us/windows/package-manager/package/manifest

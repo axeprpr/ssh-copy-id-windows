@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory=$true)][string]$Version,
   [string]$GitHubRepo = "axeprpr/ssh-copy-id-windows",
   [switch]$SkipBuild,
-  [switch]$DryRun
+  [switch]$DryRun,
+  [string]$OutputRoot = "out"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,7 +13,19 @@ function Write-Info($t){ Write-Host "[INFO] $t" -ForegroundColor Gray }
 function Write-Warn($t){ Write-Host "[WARN] $t" -ForegroundColor Yellow }
 function Write-Ok($t){ Write-Host "[OK] $t" -ForegroundColor Green }
 
-# 1. Build
+# 1. Ensure source version is aligned
+Write-Step "Version alignment"
+$mainGo = "main.go"
+$mainGoContent = Get-Content $mainGo -Raw
+$updatedMainGoContent = [regex]::Replace($mainGoContent, 'const version = ".*"', "const version = `"$Version`"")
+if($updatedMainGoContent -ne $mainGoContent){
+  Set-Content -Path $mainGo -Value $updatedMainGoContent -NoNewline
+  Write-Ok "Updated main.go version to $Version"
+} else {
+  Write-Info "main.go already uses version $Version"
+}
+
+# 2. Build
 if(-not $SkipBuild){
   Write-Step "Build"
   go build -trimpath -ldflags "-s -w" -o ssh-copy-id.exe main.go
@@ -20,12 +33,12 @@ if(-not $SkipBuild){
   Write-Ok "Binary built"
 }else{ Write-Warn "Skip build" }
 
-# 2. Hash
+# 3. Hash
 Write-Step "Hash"
 $hash = (Get-FileHash -Path ssh-copy-id.exe -Algorithm SHA256).Hash
 Write-Info "SHA256=$hash"
 
-# 3. Update manifests
+# 4. Update manifests
 Write-Step "Update winget manifests"
 $installer = Join-Path winget-manifests 'axeprpr.SSHCopyID.installer.yaml'
 (Get-Content $installer) -replace 'PackageVersion: .*', "PackageVersion: $Version" `
@@ -41,10 +54,20 @@ $localeFile = Join-Path winget-manifests 'axeprpr.SSHCopyID.locale.en-US.yaml'
 
 Write-Ok "Manifests updated"
 
-# 4. Git commit/tag/push
+# 5. Stage winget-pkgs submission files
+Write-Step "Stage winget-pkgs submission"
+$publisher = $GitHubRepo.Split('/')[0]
+$packageName = 'SSHCopyID'
+$first = $publisher.Substring(0,1).ToLowerInvariant()
+$submissionDir = Join-Path $OutputRoot "winget-pkgs/manifests/$first/$publisher/$packageName/$Version"
+New-Item -ItemType Directory -Path $submissionDir -Force | Out-Null
+Copy-Item winget-manifests\*.yaml -Destination $submissionDir -Force
+Write-Ok "Staged manifests at $submissionDir"
+
+# 6. Git commit/tag/push
 Write-Step "Git operations"
 if($DryRun){ Write-Warn "DryRun: skip git" } else {
-  git add ssh-copy-id.exe winget-manifests/*.yaml main.go 2>$null
+  git add ssh-copy-id.exe winget-manifests/*.yaml main.go .gitignore README.md WINGET_PUBLISH.md scripts\release-and-winget.ps1 2>$null
   git commit -m "release: $Version" | Out-Null
   git tag "v$Version"
   git push origin main
@@ -52,7 +75,7 @@ if($DryRun){ Write-Warn "DryRun: skip git" } else {
   Write-Ok "Git pushed with tag v$Version"
 }
 
-# 5. GitHub Release (requires gh cli)
+# 7. GitHub Release (requires gh cli)
 Write-Step "GitHub Release"
 if($DryRun){ Write-Warn "DryRun: skip release" }
 else {
@@ -67,8 +90,8 @@ else {
   }
 }
 
-# 6. Prepare winget-pkgs submission folder snippet hint
+# 8. Prepare winget-pkgs next steps
 Write-Step "Next manual step"
-$first = $GitHubRepo.Split('/')[0][0]
-Write-Host "Copy manifests to: manifests/$first/$(($GitHubRepo.Split('/')[0]))/SSHCopyID/$Version/ in winget-pkgs fork" -ForegroundColor Yellow
+Write-Host "Open microsoft/winget-pkgs and submit the files from: $submissionDir" -ForegroundColor Yellow
+Write-Host "Target path in winget-pkgs: manifests/$first/$publisher/$packageName/$Version/" -ForegroundColor Yellow
 Write-Ok "Done"
