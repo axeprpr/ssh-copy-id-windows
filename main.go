@@ -1,14 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/term"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/crypto/ssh"
 )
 
 const version = "1.1.1"
@@ -212,12 +211,17 @@ func copySSHKey(config *Config, publicKey string) error {
 }
 
 func readPassword() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	password, err := reader.ReadString('\n')
+	fd := int(os.Stdin.Fd())
+
+	// term.ReadPassword turns off terminal echo while typing
+	bytePassword, err := term.ReadPassword(fd)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(password), nil
+
+	fmt.Println()
+
+	return strings.TrimSpace(string(bytePassword)), nil
 }
 
 func buildAuthorizedKeysCommand() string {
