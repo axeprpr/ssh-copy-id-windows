@@ -17,9 +17,7 @@
 3. 在项目目录中运行：
 
 ```bash
-go mod tidy
-go test ./...
-go build -o ssh-copy-id.exe .
+make
 ```
 
 Windows release builds now include an application icon and version metadata through a generated `.syso` resource file created from `assets/icon.ico`.
